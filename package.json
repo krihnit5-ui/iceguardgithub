@@ -1,0 +1,15 @@
+{
+  "name": "iceguard-antarctic-data-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx serve .",
+    "test": "node tests/source-integrity.test.js",
+    "check": "node --check edge-functions/api/sea-ice.js && node --check edge-functions/api/icebergs.js && node --check icebergs.js && node --check api/icebergs.js && node --check app.js && node --check features.js && node --check science-data.js && node --check api/sea-ice.js"
+  },
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18"
+  }
+}

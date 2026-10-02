@@ -1,0 +1,18 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+const here = path.dirname(fileURLToPath(import.meta.url));
+const root = path.join(here, '..');
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const features = fs.readFileSync(path.join(root, 'features.js'), 'utf8');
+const science = fs.readFileSync(path.join(root, 'science-data.js'), 'utf8');
+const all = html + features + science;
+assert(!/SIH26059|SIH tools|SIMULATED DEMO DATA/i.test(all), 'hackathon-specific branding should be removed');
+assert(!/Math\.random|synthetic concentration|Synthetic grid|simulated sensor feed|risk index by site/i.test(features + html), 'synthetic scientific data UI should not be present');
+assert(html.includes('Open-Meteo forecast model'), 'weather model source must be identified');
+assert(html.includes('NSIDC Sea Ice Index'), 'sea-ice source must be identified');
+assert(html.includes('No iceberg markers or trajectories are drawn'), 'unavailable iceberg feed must not be replaced with fake tracks');
+assert(html.includes('Route lines and fuel estimates are intentionally omitted'), 'route features without real data must be omitted');
+for (const id of ['map3d','mapStatus','feedNote','sA','sW','sL','sT','cLine','cBar','refreshWeather','extentStatus','extentValue','extentDate','extentMetric','extentMetricNote','retryExtent','bergNote','bergList','proxList','proxStatus']) assert(html.includes(`id="${id}"`), `missing DOM id ${id}`);
+console.log('PASS: no hackathon branding, no synthetic scientific map/route UI, source attribution and unavailable-data states are present.');
