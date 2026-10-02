@@ -4,7 +4,6 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  if (!window.THREE) return;
 
   const sites = [
     { name: 'King George Island', lat: -62.2, lon: -58.6 },
@@ -16,7 +15,7 @@
     { name: 'Larsen Ice Shelf region', lat: -67.5, lon: -62.5 }
   ];
   const state = sites.map(site => ({ ...site, data: null, error: 'Not loaded' }));
-  window.IGSites = sites;
+  window.IGSites = state; // state entries carry .data (weather) for AI/route/proximity
   const fmt = (v, n) => Number.isFinite(v) ? v.toFixed(n) : 'n/a';
   let selected = 0, terrainReady = false, chartLine = null, chartBar = null, renderer = null, initialWeatherDone = false;
   let scene = null, camera = null, controls = null, markers = [], markerRings = [], mapVisible = true;
@@ -29,8 +28,8 @@
     const el = $('mapStatus'); if (el) { el.textContent = text; el.hidden = !show; }
   }
   function temperatureColor(temp) {
-    if (!Number.isFinite(temp)) return new THREE.Color('#7f93a8');
-    return new THREE.Color(temp <= 0 ? '#4cc9f0' : '#ffbf5e');
+    const hex = !Number.isFinite(temp) ? '#7f93a8' : temp <= 0 ? '#4cc9f0' : '#ffbf5e';
+    return window.THREE ? new THREE.Color(hex) : { getStyle: () => hex };
   }
   function mercator(lat, lon, zoom, tileX, tileY) {
     const rad = lat * Math.PI / 180;
@@ -71,8 +70,18 @@
     if (!Number.isFinite(temp) || !Number.isFinite(wind) || !Array.isArray(json.hourly?.time) || !Array.isArray(json.hourly?.temperature_2m)) {
       throw new Error('Open-Meteo response missing expected weather fields');
     }
+    let current = null, currentError = null;
+    try {
+      const mu = new URL('https://marine-api.open-meteo.com/v1/marine');
+      mu.search = new URLSearchParams({ latitude: String(site.lat), longitude: String(site.lon), current: 'ocean_current_velocity,ocean_current_direction', timezone: 'UTC' }).toString();
+      const mr = await fetch(mu, { cache: 'no-store', signal: AbortSignal.timeout(12000) });
+      if (!mr.ok) throw new Error(`Marine API HTTP ${mr.status}`);
+      const mj = await mr.json(), v = mj.current?.ocean_current_velocity, d = mj.current?.ocean_current_direction;
+      if (Number.isFinite(v) && Number.isFinite(d)) current = { speedKmh: v, toDir: d, time: mj.current.time || null };
+      else currentError = 'No current value at this point (sea-ice-covered or unmodelled cell)';
+    } catch (e) { currentError = e.message; }
     return {
-      temperature: temp, wind, dir: json.current.wind_direction_10m, gust: json.current.wind_gusts_10m, pressure: json.current.pressure_msl, time: json.current.time || null,
+      current, currentError, temperature: temp, wind, dir: json.current.wind_direction_10m, gust: json.current.wind_gusts_10m, pressure: json.current.pressure_msl, time: json.current.time || null,
       hourlyTime: json.hourly.time, hourlyTemp: json.hourly.temperature_2m,
       source: 'Open-Meteo forecast model', fetchedAt: new Date().toISOString()
     };
@@ -87,7 +96,7 @@
     });
     const loaded = state.filter(s => s.data).length;
     const times = state.filter(s => s.data?.time).map(s => s.data.time).sort();
-    $('feedNote').textContent = `Source: Open-Meteo forecast model. ${loaded}/7 locations loaded. Model output is not an in-situ station observation; timestamps are UTC.`;
+    $('feedNote').textContent = `Source: Open-Meteo forecast + Marine API (CC BY 4.0). ${loaded}/7 locations loaded, ${state.filter(s => s.data?.current).length}/7 with ocean-current data. Model output is not an in-situ station observation; timestamps are UTC.`;
     $('sT').textContent = `${loaded} / ${state.length}`;
     const available = state.filter(s => s.data);
     $('sA').textContent = available.length ? `${(available.reduce((sum, s) => sum + s.data.temperature, 0) / available.length).toFixed(1)}°C` : 'Unavailable';
@@ -95,7 +104,7 @@
     $('sL').textContent = available.length ? `${available.filter(s => s.data.temperature <= 0).length} / ${available.length}` : 'Unavailable';
     $('weatherUpdated').textContent = times.length ? `Model timestamps: ${times[0]}–${times[times.length - 1]} UTC · refreshed ${new Date().toISOString()}` : 'No successful response; no values are substituted.';
     setPill(loaded === state.length ? 'WEATHER MODEL · 7/7 LOCATIONS' : `WEATHER MODEL · ${loaded}/7 LOCATIONS`, loaded > 0);
-    updateCharts(); updateSelection(); updateMarkers();
+    updateCharts(); updateSelection(); updateMarkers(); window.dispatchEvent(new Event('iceguard:weather'));
     if (!initialWeatherDone) { initialWeatherDone = true; window.IG?.done('Weather source checked'); }
     $('refreshWeather').disabled = false;
   }
@@ -120,7 +129,7 @@
     const s = state[selected], d = s.data;
     $('lt').textContent = `${s.name} · hourly model temperature`;
     $('sel').innerHTML = d
-      ? `<div><span>Location</span><b>${s.name}</b></div><div><span>Latitude / longitude</span><b>${s.lat.toFixed(2)}, ${s.lon.toFixed(2)}</b></div><div><span>Model temperature</span><b>${d.temperature.toFixed(1)}°C</b></div><div><span>Model wind</span><b>${d.wind.toFixed(1)} km/h</b></div><div><span>Wind from / gusts</span><b>${fmt(d.dir, 0)}° / ${fmt(d.gust, 1)} km/h</b></div><div><span>Sea-level pressure</span><b>${fmt(d.pressure, 1)} hPa</b></div><div><span>Model timestamp (UTC)</span><b>${d.time || 'Not supplied'}</b></div>`
+      ? `<div><span>Location</span><b>${s.name}</b></div><div><span>Latitude / longitude</span><b>${s.lat.toFixed(2)}, ${s.lon.toFixed(2)}</b></div><div><span>Model temperature</span><b>${d.temperature.toFixed(1)}°C</b></div><div><span>Model wind</span><b>${d.wind.toFixed(1)} km/h</b></div><div><span>Wind from / gusts</span><b>${fmt(d.dir, 0)}° / ${fmt(d.gust, 1)} km/h</b></div><div><span>Sea-level pressure</span><b>${fmt(d.pressure, 1)} hPa</b></div><div><span>Ocean current (heading to)</span><b>${d.current ? `${d.current.speedKmh.toFixed(2)} km/h → ${fmt(d.current.toDir, 0)}°` : 'Unavailable'}</b></div><div><span>Model timestamp (UTC)</span><b>${d.time || 'Not supplied'}</b></div>`
       : `<div><span>Location</span><b>${s.name}</b></div><div><span>Data status</span><b>Unavailable</b></div><div><span>Source error</span><b>${String(s.error || 'No response').replace(/[<>&"']/g, '')}</b></div>`;
     if (chartLine) updateCharts();
   }
@@ -169,6 +178,8 @@
     function pick(e) { const r = canvas.getBoundingClientRect(); mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(mouse, cam); return ray.intersectObjects(markers)[0]?.object?.userData?.index; }
     canvas.addEventListener('pointermove', e => { const i = pick(e); canvas.style.cursor = i != null ? 'pointer' : 'grab'; if (i == null) { tip.hidden = true; return; } const r = canvas.getBoundingClientRect(), d = state[i]; tip.hidden = false; tip.style.left = `${e.clientX - r.left}px`; tip.style.top = `${e.clientY - r.top}px`; tip.textContent = d.data ? `${d.name} · ${d.data.temperature.toFixed(1)}°C · ${d.data.wind.toFixed(1)} km/h · model ${d.data.time || 'time unavailable'} UTC` : `${d.name} · weather data unavailable`; });
     canvas.addEventListener('pointerleave', () => { tip.hidden = true; }); canvas.addEventListener('pointerdown', e => { pointerDown = [e.clientX, e.clientY]; }); canvas.addEventListener('pointerup', e => { if (pointerDown && Math.hypot(e.clientX - pointerDown[0], e.clientY - pointerDown[1]) < 6) { const i = pick(e); if (i != null) { selected = i; updateSelection(); chips.querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-pressed', String(j === i + 1))); } } pointerDown = null; });
+    // Land/ice-shelf lookup from the real elevation tiles (used by route DSS). null = outside tile coverage.
+    window.IGElevationAt = (lat, lon) => { const [x, z] = mercator(lat, lon, 5, 9, 22); return Math.abs(x) > W / 2 || Math.abs(z) > W / 2 ? null : hAt(x, z); };
     terrainReady = true; window.IG?.done('Elevation source loaded'); $('terr').textContent = 'Terrain: published elevation tiles · particles: Open-Meteo model wind, interpolated between sites, time-compressed'; setMapStatus('', false); updateMarkers();
     const resize = () => { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return; R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); };
     new ResizeObserver(resize).observe(canvas); resize();
@@ -200,6 +211,7 @@
   }
   async function init() {
     initCharts(); $('refreshWeather').addEventListener('click', refreshWeather); await refreshWeather();
+    if (!window.THREE) { initTerrain(null); return; }
     try { const terrain = await fetchTerrain(); initTerrain(terrain); }
     catch (error) { initTerrain(null); console.warn('Published elevation source unavailable:', error); }
   }

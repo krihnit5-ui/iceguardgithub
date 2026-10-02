@@ -3,7 +3,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const page = 'https://www.scp.byu.edu/current_icebergs.html';
-  const routes = [['same-origin /api/icebergs', '/api/icebergs'], ['BYU SCP (direct)', page], ['allorigins relay', 'https://api.allorigins.win/raw?url=' + encodeURIComponent(page)]];
+  const routes = [['same-origin /api/icebergs', '/api/icebergs'], ['BYU SCP (direct)', page]];
   const dms = t => { const m = /(\d+)\s+(\d+)'\s*([EWNS])/.exec(t || ''); if (!m) return NaN; const v = +m[1] + (+m[2]) / 60; return /[WS]/.test(m[3]) ? -v : v; };
   function parse(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html'), list = [];
@@ -30,7 +30,7 @@
       catch (e) { errors.push(`${label}: ${e.message}`); }
     }
     if (!res) { setStatus('bergStatus', 'error', 'Iceberg feed unavailable'); setStatus('proxStatus', 'error', 'Waiting for iceberg feed'); $('bergNote').textContent = `No iceberg markers or trajectories are drawn because the feed could not be loaded. ${errors.join(' | ')}`; return; }
-    const { list, revDate, label } = res; window.IGBergsPending = list;
+    const { list, revDate, label } = res; window.IGBergsPending = list; window.IGIcebergs = list;
     const inMap = window.IGBergs ? window.IGBergs(list) : null;
     const age = revDate ? (Date.now() - revDate) / 864e5 : null;
     setStatus('bergStatus', age != null && age > 14 ? 'stale' : 'live', age != null && age > 14 ? 'Loaded; list is older than 14 days' : 'BYU / NASA SCP list loaded');
@@ -38,7 +38,7 @@
     const west = list.filter(b => b.lon < -30 && b.lon > -80 && b.lat > -72).sort((a, b) => b.lon - a.lon);
     rows($('bergList'), (west.length ? west : list).slice(0, 8).map(b => [b.name, `${pos(b)} · obs ${b.date.toISOString().slice(5, 10)}`]));
     const sites = window.IGSites || [];
-    setStatus('proxStatus', age != null && age > 14 ? 'stale' : 'live', 'Computed from real positions');
+    setStatus('proxStatus', age != null && age > 14 ? 'stale' : 'live', 'Computed from real positions'); window.dispatchEvent(new Event('iceguard:icebergs'));
     rows($('proxList'), sites.map(s => { let best = null; list.forEach(b => { const d = km(s, b); if (!best || d < best.d) best = { b, d }; }); return [s.name, `${best.b.name} · ${Math.round(best.d).toLocaleString()} km`]; }));
   }
   load().catch(e => { setStatus('bergStatus', 'error', 'Iceberg feed unavailable'); $('bergNote').textContent = e.message; });

@@ -3,11 +3,10 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const official = 'https://noaadata.apps.nsidc.org/NOAA/G02135/south/daily/data/S_seaice_extent_daily_v4.0.csv';
-  // Same-origin function first, then the official URL, then public CORS relays that return the unmodified official CSV.
+  // Same-origin function first, then the official URL,  that return the unmodified official CSV.
   const sources = [
     ['same-origin /api/sea-ice', '/api/sea-ice'],
-    ['NSIDC (direct)', official],
-    ['NSIDC via allorigins relay', 'https://api.allorigins.win/raw?url=' + encodeURIComponent(official)]
+    ['NSIDC (direct)', official]
   ];
   // Last resort: NOAA CoastWatch ERDDAP (CORS-enabled) serving the NOAA/NSIDC sea-ice concentration grid. Extent is DERIVED here (cells >= 15% x 625 km2).
   const erddapBase = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/nsidcG10016v3sh1day';
@@ -22,6 +21,14 @@
     }
     if (!iso || valid < 20000) throw new Error('unexpected ERDDAP response');
     return { date: new Date(iso), extent: n * 0.000625, valid };
+  }
+  function forecast(recs) {
+    const el = $('fcBox'), AI = window.IceGuardAI; if (!el || !AI) return;
+    const m = AI.trainExtentForecaster(recs);
+    if (m.status !== 'TRAINED') { el.textContent = 'Forecast unavailable: not enough history.'; return; }
+    const f = h => { const x = m.forecast(h); return `${h} d (${x.date.toISOString().slice(0, 10)}): ${x.extent.toFixed(2)} M km²`; };
+    const s = h => { const r = m.horizons[h]; return `${h} d: model ${r.maeModel.toFixed(3)} · persistence ${r.maePersistence.toFixed(3)} · climatology ${r.maeClimatology.toFixed(3)} (n=${r.n})`; };
+    el.textContent = `MODELLED forecast of hemispheric extent, ${f(7)}; ${f(30)}. Held-out test since ${m.testFrom.toISOString().slice(0, 10)}, mean absolute error in M km² (lower is better) — ${s(7)} | ${s(30)}. Learned on this NSIDC series in your browser; extent only, not a concentration map.`;
   }
   let chart = null;
   function status(kind, message) { const el = $('extentStatus'); el.className = `data-status ${kind}`; el.textContent = message; }
@@ -89,7 +96,7 @@
     $('extentMetricNote').textContent = `One-day persistence baseline across ${diffs.length} sequential comparisons; not an IceGuard forecast.`;
     const ly = recs.find(r => r.date.getTime() === Date.UTC(latest.date.getUTCFullYear() - 1, latest.date.getUTCMonth(), latest.date.getUTCDate()));
     $('extentDelta').textContent = ly ? `Same date last year (${ly.date.toISOString().slice(0, 10)}): ${ly.extent.toFixed(3)} million km² · difference ${(latest.extent - ly.extent >= 0 ? '+' : '') + (latest.extent - ly.extent).toFixed(3)}` : 'Same-date record for last year not present in source.';
-    drawChart(recs);
+    drawChart(recs); forecast(recs);
     const age = (Date.now() - latest.date.getTime()) / 864e5;
     status(age > 10 ? 'stale' : 'live', age > 10 ? 'Source loaded; latest record is older than 10 days' : 'Official source loaded');
   }

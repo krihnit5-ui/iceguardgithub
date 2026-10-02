@@ -1,15 +1,15 @@
 {
-  "name": "iceguard-antarctic-data-dashboard",
+  "name": "iceguard",
   "version": "1.0.0",
+  "description": "AI-enabled Antarctic sea-ice, iceberg trajectory and navigation decision-support dashboard built on real public data",
   "private": true,
+  "license": "MIT",
   "type": "module",
+  "engines": { "node": ">=18" },
+  "keywords": ["antarctica", "sea-ice", "iceberg", "decision-support", "threejs", "open-data"],
   "scripts": {
     "start": "npx serve .",
-    "test": "node tests/source-integrity.test.js",
-    "check": "node --check edge-functions/api/sea-ice.js && node --check edge-functions/api/icebergs.js && node --check icebergs.js && node --check api/icebergs.js && node --check app.js && node --check features.js && node --check science-data.js && node --check api/sea-ice.js"
-  },
-  "license": "UNLICENSED",
-  "engines": {
-    "node": ">=18"
+    "test": "node tests/source-integrity.test.js && node tests/ai-engine.test.js",
+    "check": "node --check app.js && node --check features.js && node --check science-data.js && node --check icebergs.js && node --check ai-engine.js && node --check decision-support.js && node --check api/sea-ice.js && node --check api/icebergs.js && node --check api/ai.js && node --check edge-functions/api/sea-ice.js && node --check edge-functions/api/icebergs.js"
   }
 }

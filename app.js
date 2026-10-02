@@ -14,7 +14,7 @@ document.querySelectorAll('.stats article').forEach(c=>{c.addEventListener('poin
 const bar=$('progress'),links=[...document.querySelectorAll('.nav nav a')];
 addEventListener('scroll',()=>{if(bar)bar.style.transform=`scaleX(${scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight)})`;},{passive:true});
 addEventListener('pointermove',e=>{if(rm)return;document.body.style.setProperty('--mx',e.clientX+'px');document.body.style.setProperty('--my',e.clientY+'px');});
-if('IntersectionObserver' in window){const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)links.forEach(a=>a.toggleAttribute('data-active',a.getAttribute('href')==='#'+e.target.id));}),{rootMargin:'-45% 0px -45% 0px'});['map','dash','science'].forEach(i=>{const el=$(i);if(el)io.observe(el);});}
+if('IntersectionObserver' in window){const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)links.forEach(a=>a.toggleAttribute('data-active',a.getAttribute('href')==='#'+e.target.id));}),{rootMargin:'-45% 0px -45% 0px'});['map','dash','science','seaice','ai','route'].forEach(i=>{const el=$(i);if(el)io.observe(el);});}
 if(!window.THREE)return;
 const cv=$('bg'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});R.setPixelRatio(Math.min(devicePixelRatio,2));
 const S=new THREE.Scene(),C=new THREE.PerspectiveCamera(45,1,.1,100);C.position.z=6;
